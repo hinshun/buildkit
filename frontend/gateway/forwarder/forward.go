@@ -7,6 +7,7 @@ import (
 	"github.com/moby/buildkit/cache"
 	cacheutil "github.com/moby/buildkit/cache/util"
 	clienttypes "github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend"
 	"github.com/moby/buildkit/frontend/gateway/client"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
@@ -131,6 +132,14 @@ func (c *bridgeClient) discard(err error) {
 
 type ref struct {
 	solver.CachedResult
+}
+
+func (r *ref) ToInput(*llb.Constraints) (*opspb.Input, error) {
+	return nil, nil
+}
+
+func (r *ref) Vertex() llb.Vertex {
+	return nil
 }
 
 func (r *ref) ReadFile(ctx context.Context, req client.ReadRequest) ([]byte, error) {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gogo/googleapis/google/rpc"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/gateway/client"
 	pb "github.com/moby/buildkit/frontend/gateway/pb"
 	opspb "github.com/moby/buildkit/solver/pb"
@@ -328,7 +329,7 @@ func (c *grpcClient) Solve(ctx context.Context, creq client.SolveRequest) (*clie
 	return res, nil
 }
 
-func (c *grpcClient) ResolveImageConfig(ctx context.Context, ref string, opt client.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
+func (c *grpcClient) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
 	var p *opspb.Platform
 	if platform := opt.Platform; platform != nil {
 		p = &opspb.Platform{
@@ -360,6 +361,14 @@ func (c *grpcClient) BuildOpts() client.BuildOpts {
 type reference struct {
 	id string
 	c  *grpcClient
+}
+
+func (r *reference) ToInput(*llb.Constraints) (*opspb.Input, error) {
+	return nil, nil
+}
+
+func (r *reference) Vertex() llb.Vertex {
+	return nil
 }
 
 func (r *reference) ReadFile(ctx context.Context, req client.ReadRequest) ([]byte, error) {
