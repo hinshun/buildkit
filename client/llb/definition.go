@@ -97,14 +97,12 @@ func (d *DefinitionOp) Marshal(c *Constraints) (digest.Digest, []byte, *pb.OpMet
 	if d.dgst == "" {
 		return "", nil, nil, errors.Errorf("cannot marshal empty definition op")
 	}
-
 	if err := d.Validate(); err != nil {
 		return "", nil, nil, err
 	}
 
 	meta := d.metas[d.dgst]
 	return d.dgst, d.defs[d.dgst], &meta, nil
-
 }
 
 func (d *DefinitionOp) Output() Output {
@@ -127,11 +125,12 @@ func (d *DefinitionOp) Inputs() []Output {
 	op := d.ops[d.dgst]
 	for _, input := range op.Inputs {
 		vtx := &DefinitionOp{
-			ops:   d.ops,
-			defs:  d.defs,
-			metas: d.metas,
-			dgst:  input.Digest,
-			index: input.Index,
+			ops:       d.ops,
+			defs:      d.defs,
+			metas:     d.metas,
+			platforms: d.platforms,
+			dgst:      input.Digest,
+			index:     input.Index,
 		}
 		inputs = append(inputs, &output{vertex: vtx, platform: d.platform(), getIndex: func() (pb.OutputIndex, error) {
 			return pb.OutputIndex(vtx.index), nil

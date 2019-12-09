@@ -95,6 +95,7 @@ func TestIntegration(t *testing.T) {
 		testNetworkMode,
 		testFrontendMetadataReturn,
 		testFrontendUseSolveResults,
+		testFrontendUseForwardedSolveResults,
 		testSSHMount,
 		testStdinClosed,
 		testHostnameLookup,
