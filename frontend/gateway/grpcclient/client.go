@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gogo/googleapis/google/rpc"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/gateway/client"
 	pb "github.com/moby/buildkit/frontend/gateway/pb"
 	opspb "github.com/moby/buildkit/solver/pb"
@@ -68,15 +69,15 @@ func current() (GrpcClient, error) {
 	return New(ctx, opts(), sessionID(), product(), pb.NewLLBBridgeClient(conn), workers())
 }
 
-func convertRef(ref client.Reference) (string, error) {
+func convertRef(ref client.Reference) (*pb.Ref, error) {
 	if ref == nil {
-		return "", nil
+		return &pb.Ref{}, nil
 	}
 	r, ok := ref.(*reference)
 	if !ok {
-		return "", errors.Errorf("invalid return reference type %T", ref)
+		return nil, errors.Errorf("invalid return reference type %T", ref)
 	}
-	return r.id, nil
+	return &pb.Ref{Ids: []string{r.id}, Definitions: []*opspb.Definition{r.def}}, nil
 }
 
 func RunFromEnvironment(ctx context.Context, f client.BuildFunc) error {
@@ -107,20 +108,20 @@ func (c *grpcClient) Run(ctx context.Context, f client.BuildFunc) (retError erro
 				if res.Refs != nil {
 					m := map[string]*pb.Ref{}
 					for k, r := range res.Refs {
-						id, err := convertRef(r)
+						pbRef, err := convertRef(r)
 						if err != nil {
 							retError = err
 							continue
 						}
-						m[k] = pb.NewRef(id)
+						m[k] = pbRef
 					}
 					pbRes.Result = &pb.Result_Refs{Refs: &pb.RefMap{Refs: m}}
 				} else {
-					id, err := convertRef(res.Ref)
+					pbRef, err := convertRef(res.Ref)
 					if err != nil {
 						retError = err
 					} else {
-						pbRes.Result = &pb.Result_Ref{Ref: pb.NewRef(id)}
+						pbRes.Result = &pb.Result_Ref{Ref: pbRef}
 					}
 				}
 				if retError == nil {
@@ -329,7 +330,13 @@ func (c *grpcClient) Solve(ctx context.Context, creq client.SolveRequest) (*clie
 				if len(ids) > 1 {
 					return nil, errors.Errorf("solve returned multi-result array")
 				}
-				res.SetRef(&reference{id: ids[0], c: c})
+
+				ref, err := newReference(c, ids[0], pbRes.Ref.Definitions[0])
+				if err != nil {
+					return nil, err
+				}
+
+				res.SetRef(ref)
 			}
 		case *pb.Result_Refs:
 			for k, v := range pbRes.Refs.Refs {
@@ -338,7 +345,10 @@ func (c *grpcClient) Solve(ctx context.Context, creq client.SolveRequest) (*clie
 					if len(v.Ids) > 1 {
 						return nil, errors.Errorf("solve returned multi-result array")
 					}
-					ref = &reference{id: v.Ids[0], c: c}
+					ref, err = newReference(c, v.Ids[0], v.Definitions[0])
+					if err != nil {
+						return nil, err
+					}
 				}
 				res.AddRef(k, ref)
 			}
@@ -348,7 +358,7 @@ func (c *grpcClient) Solve(ctx context.Context, creq client.SolveRequest) (*clie
 	return res, nil
 }
 
-func (c *grpcClient) ResolveImageConfig(ctx context.Context, ref string, opt client.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
+func (c *grpcClient) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
 	var p *opspb.Platform
 	if platform := opt.Platform; platform != nil {
 		p = &opspb.Platform{
@@ -378,8 +388,27 @@ func (c *grpcClient) BuildOpts() client.BuildOpts {
 }
 
 type reference struct {
-	id string
-	c  *grpcClient
+	c   *grpcClient
+	id  string
+	def *opspb.Definition
+	dop *llb.DefinitionOp
+}
+
+func newReference(c *grpcClient, id string, def *opspb.Definition) (*reference, error) {
+	dop, err := llb.NewDefinitionOp(def)
+	if err != nil {
+		return nil, err
+	}
+
+	return &reference{c: c, id: id, def: def, dop: dop}, nil
+}
+
+func (r *reference) ToInput(c *llb.Constraints) (*opspb.Input, error) {
+	return r.Vertex().Output().ToInput(c)
+}
+
+func (r *reference) Vertex() llb.Vertex {
+	return r.dop
 }
 
 func (r *reference) ReadFile(ctx context.Context, req client.ReadRequest) ([]byte, error) {

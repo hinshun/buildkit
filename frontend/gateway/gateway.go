@@ -21,7 +21,6 @@ import (
 	"github.com/moby/buildkit/executor"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend"
-	gw "github.com/moby/buildkit/frontend/gateway/client"
 	pb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
@@ -113,7 +112,7 @@ func (gf *gatewayFrontend) Solve(ctx context.Context, llbBridge frontend.Fronten
 			return nil, err
 		}
 
-		dgst, config, err := llbBridge.ResolveImageConfig(ctx, reference.TagNameOnly(sourceRef).String(), gw.ResolveImageConfigOpt{})
+		dgst, config, err := llbBridge.ResolveImageConfig(ctx, reference.TagNameOnly(sourceRef).String(), llb.ResolveImageConfigOpt{})
 		if err != nil {
 			return nil, err
 		}
@@ -405,7 +404,7 @@ func (lbf *llbBridgeForwarder) ResolveImageConfig(ctx context.Context, req *pb.R
 			OSFeatures:   p.OSFeatures,
 		}
 	}
-	dgst, dt, err := lbf.llbBridge.ResolveImageConfig(ctx, req.Ref, gw.ResolveImageConfigOpt{
+	dgst, dt, err := lbf.llbBridge.ResolveImageConfig(ctx, req.Ref, llb.ResolveImageConfigOpt{
 		Platform:    platform,
 		ResolveMode: req.ResolveMode,
 		LogName:     req.LogName,
@@ -479,7 +478,7 @@ func (lbf *llbBridgeForwarder) Solve(ctx context.Context, req *pb.SolveRequest) 
 		if req.AllowResultArrayRef {
 			refMap := make(map[string]*pb.Ref, len(res.Refs))
 			for k, id := range ids {
-				refMap[k] = pb.NewRef(id)
+				refMap[k] = pb.NewRef(id, res.Definition)
 			}
 			pbRes.Result = &pb.Result_Refs{Refs: &pb.RefMap{Refs: refMap}}
 		} else {
@@ -495,7 +494,7 @@ func (lbf *llbBridgeForwarder) Solve(ctx context.Context, req *pb.SolveRequest) 
 		defaultID = id
 
 		if req.AllowResultArrayRef {
-			pbRes.Result = &pb.Result_Ref{Ref: pb.NewRef(id)}
+			pbRes.Result = &pb.Result_Ref{Ref: pb.NewRef(id, res.Definition)}
 		} else {
 			pbRes.Result = &pb.Result_RefDeprecated{RefDeprecated: id}
 		}

@@ -7,6 +7,7 @@ import (
 	"github.com/moby/buildkit/cache"
 	cacheutil "github.com/moby/buildkit/cache/util"
 	clienttypes "github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend"
 	"github.com/moby/buildkit/frontend/gateway/client"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
@@ -54,12 +55,18 @@ func (c *bridgeClient) Solve(ctx context.Context, req client.SolveRequest) (*cli
 	cRes := &client.Result{}
 	c.mu.Lock()
 	for k, r := range res.Refs {
-		rr := &ref{r}
+		rr, err := newRef(r, res.Definition)
+		if err != nil {
+			return nil, err
+		}
 		c.refs = append(c.refs, rr)
 		cRes.AddRef(k, rr)
 	}
 	if r := res.Ref; r != nil {
-		rr := &ref{r}
+		rr, err := newRef(r, res.Definition)
+		if err != nil {
+			return nil, err
+		}
 		c.refs = append(c.refs, rr)
 		cRes.SetRef(rr)
 	}
@@ -131,6 +138,24 @@ func (c *bridgeClient) discard(err error) {
 
 type ref struct {
 	solver.CachedResult
+	dop *llb.DefinitionOp
+}
+
+func newRef(r solver.CachedResult, def *opspb.Definition) (*ref, error) {
+	dop, err := llb.NewDefinitionOp(def)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ref{CachedResult: r, dop: dop}, nil
+}
+
+func (r *ref) ToInput(c *llb.Constraints) (*opspb.Input, error) {
+	return r.Vertex().Output().ToInput(c)
+}
+
+func (r *ref) Vertex() llb.Vertex {
+	return r.dop
 }
 
 func (r *ref) ReadFile(ctx context.Context, req client.ReadRequest) ([]byte, error) {
