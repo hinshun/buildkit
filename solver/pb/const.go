@@ -18,6 +18,10 @@ const Empty InputIndex = -1
 // LLBBuilder is a special builder for BuildOp that directly builds LLB
 const LLBBuilder InputIndex = -1
 
+// FrontendBuilder is a special builder for BuildOp that builds from a frontend
+// image.
+const FrontendBuilder InputIndex = 0
+
 // LLBDefinitionInput marks an input that contains LLB definition for BuildOp
 const LLBDefinitionInput = "buildkit.llb.definition"
 

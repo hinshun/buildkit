@@ -8,31 +8,37 @@ import (
 	"github.com/containerd/continuity/fs"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend"
+	"github.com/moby/buildkit/frontend/gateway"
 	"github.com/moby/buildkit/snapshot"
 	"github.com/moby/buildkit/solver"
 	"github.com/moby/buildkit/solver/llbsolver"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/worker"
 	digest "github.com/opencontainers/go-digest"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
 const buildCacheType = "buildkit.build.v0"
 
 type buildOp struct {
-	op *pb.BuildOp
-	b  frontend.FrontendLLBBridge
-	v  solver.Vertex
+	op        *pb.BuildOp
+	llbBridge frontend.FrontendLLBBridge
+	v         solver.Vertex
+	w         worker.Worker
+	wi        frontend.WorkerInfos
 }
 
-func NewBuildOp(v solver.Vertex, op *pb.Op_Build, b frontend.FrontendLLBBridge, _ worker.Worker) (solver.Op, error) {
+func NewBuildOp(v solver.Vertex, op *pb.Op_Build, b frontend.FrontendLLBBridge, w worker.Worker, wi frontend.WorkerInfos) (solver.Op, error) {
 	if err := llbsolver.ValidateOp(&pb.Op{Op: op}); err != nil {
 		return nil, err
 	}
 	return &buildOp{
-		op: op.Build,
-		b:  b,
-		v:  v,
+		op:        op.Build,
+		llbBridge: b,
+		v:         v,
+		w:         w,
+		wi:        wi,
 	}, nil
 }
 
@@ -58,10 +64,13 @@ func (b *buildOp) CacheMap(ctx context.Context, index int) (*solver.CacheMap, bo
 }
 
 func (b *buildOp) Exec(ctx context.Context, inputs []solver.Result) (outputs []solver.Result, retErr error) {
-	if b.op.Builder != pb.LLBBuilder {
-		return nil, errors.Errorf("only LLB builder is currently allowed")
+	if b.op.Builder == pb.LLBBuilder {
+		return b.buildWithLLB(ctx, inputs)
 	}
+	return b.buildWithFrontend(ctx, inputs)
+}
 
+func (b *buildOp) buildWithLLB(ctx context.Context, inputs []solver.Result) (outputs []solver.Result, retErr error) {
 	builderInputs := b.op.Inputs
 	llbDef, ok := builderInputs[pb.LLBDefinitionInput]
 	if !ok {
@@ -121,7 +130,7 @@ func (b *buildOp) Exec(ctx context.Context, inputs []solver.Result) (outputs []s
 	lm.Unmount()
 	lm = nil
 
-	newRes, err := b.b.Solve(ctx, frontend.SolveRequest{
+	newRes, err := b.llbBridge.Solve(ctx, frontend.SolveRequest{
 		Definition: def.ToPB(),
 	})
 	if err != nil {
@@ -133,4 +142,27 @@ func (b *buildOp) Exec(ctx context.Context, inputs []solver.Result) (outputs []s
 	}
 
 	return []solver.Result{newRes.Ref}, err
+}
+
+func (b *buildOp) buildWithFrontend(ctx context.Context, inputs []solver.Result) (outputs []solver.Result, retErr error) {
+	inp := inputs[b.op.Builder]
+
+	ref, ok := inp.Sys().(*worker.WorkerRef)
+	if !ok {
+		return nil, errors.Errorf("invalid reference for build %T", inp.Sys())
+	}
+	rootFS := ref.ImmutableRef
+
+	cfg := specs.ImageConfig{
+		Entrypoint: b.op.Args,
+		Env:        b.op.Env,
+		WorkingDir: b.op.Cwd,
+	}
+
+	res, err := gateway.ExecWithFrontend(ctx, b.llbBridge, b.wi, rootFS, cfg, b.op.Attrs)
+	if err != nil {
+		return nil, err
+	}
+
+	return []solver.Result{res.Ref}, nil
 }
