@@ -154,9 +154,10 @@ message SourceOp {
 message BuildOp {
 	int64 builder = 1 [(gogoproto.customtype) = "InputIndex", (gogoproto.nullable) = false];
 	map<string, BuildInput> inputs = 2;
-	Definition def = 3;
-	map<string, string> attrs = 4;
-	// outputs
+	map<string, string> attrs = 3;
+	repeated string args = 4;
+	repeated string env = 5;
+	string cwd = 6;
 }
 
 // BuildInput is used for BuildOp.
