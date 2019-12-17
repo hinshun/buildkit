@@ -55,7 +55,7 @@ func (d *DefinitionOp) Validate() error {
 		return errors.Errorf("invalid definition op with unknown metadata %q", d.dgst)
 	}
 
-	if d.index < 0 || int(d.index) >= len(op.Inputs) {
+	if d.index < 0 || (len(op.Inputs) > 0 && int(d.index) >= len(op.Inputs)) {
 		return errors.Errorf("invalid definition op with invalid index %d", d.index)
 	}
 
