@@ -38,6 +38,7 @@ message Result {
 		RefMap refs = 4;
 	}
 	map<string, bytes> metadata = 10;
+	pb.Definition Definition = 11;
 }
 
 message RefMapDeprecated {
@@ -46,7 +47,6 @@ message RefMapDeprecated {
 
 message Ref {
 	repeated string ids = 1;
-	repeated pb.Definition Definitions = 2;
 }
 
 message RefMap {

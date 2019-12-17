@@ -459,7 +459,9 @@ func (lbf *llbBridgeForwarder) Solve(ctx context.Context, req *pb.SolveRequest) 
 		return nil, errors.Errorf("solve did not return default result")
 	}
 
-	pbRes := &pb.Result{}
+	pbRes := &pb.Result{
+		Definition: res.Definition,
+	}
 	var defaultID string
 
 	lbf.mu.Lock()
@@ -478,7 +480,7 @@ func (lbf *llbBridgeForwarder) Solve(ctx context.Context, req *pb.SolveRequest) 
 		if req.AllowResultArrayRef {
 			refMap := make(map[string]*pb.Ref, len(res.Refs))
 			for k, id := range ids {
-				refMap[k] = pb.NewRef(id, res.Definition)
+				refMap[k] = pb.NewRef(id)
 			}
 			pbRes.Result = &pb.Result_Refs{Refs: &pb.RefMap{Refs: refMap}}
 		} else {
@@ -494,7 +496,7 @@ func (lbf *llbBridgeForwarder) Solve(ctx context.Context, req *pb.SolveRequest) 
 		defaultID = id
 
 		if req.AllowResultArrayRef {
-			pbRes.Result = &pb.Result_Ref{Ref: pb.NewRef(id, res.Definition)}
+			pbRes.Result = &pb.Result_Ref{Ref: pb.NewRef(id)}
 		} else {
 			pbRes.Result = &pb.Result_RefDeprecated{RefDeprecated: id}
 		}

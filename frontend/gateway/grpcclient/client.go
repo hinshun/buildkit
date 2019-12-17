@@ -77,7 +77,7 @@ func convertRef(ref client.Reference) (*pb.Ref, error) {
 	if !ok {
 		return nil, errors.Errorf("invalid return reference type %T", ref)
 	}
-	return &pb.Ref{Ids: []string{r.id}, Definitions: []*opspb.Definition{r.def}}, nil
+	return &pb.Ref{Ids: []string{r.id}}, nil
 }
 
 func RunFromEnvironment(ctx context.Context, f client.BuildFunc) error {
@@ -310,6 +310,12 @@ func (c *grpcClient) Solve(ctx context.Context, creq client.SolveRequest) (*clie
 		}
 		res.SetRef(&reference{id: resp.Ref, c: c})
 	} else {
+		vtx, err := llb.NewDefinitionOp(resp.Result.Definition)
+		if err != nil {
+			return nil, err
+		}
+		res.SetOutput(vtx.Output())
+
 		res.Metadata = resp.Result.Metadata
 		switch pbRes := resp.Result.Result.(type) {
 		case *pb.Result_RefDeprecated:
@@ -331,12 +337,7 @@ func (c *grpcClient) Solve(ctx context.Context, creq client.SolveRequest) (*clie
 					return nil, errors.Errorf("solve returned multi-result array")
 				}
 
-				ref, err := newReference(c, ids[0], pbRes.Ref.Definitions[0])
-				if err != nil {
-					return nil, err
-				}
-
-				res.SetRef(ref)
+				res.SetRef(&reference{id: ids[0], c: c})
 			}
 		case *pb.Result_Refs:
 			for k, v := range pbRes.Refs.Refs {
@@ -345,10 +346,8 @@ func (c *grpcClient) Solve(ctx context.Context, creq client.SolveRequest) (*clie
 					if len(v.Ids) > 1 {
 						return nil, errors.Errorf("solve returned multi-result array")
 					}
-					ref, err = newReference(c, v.Ids[0], v.Definitions[0])
-					if err != nil {
-						return nil, err
-					}
+
+					ref = &reference{id: v.Ids[0], c: c}
 				}
 				res.AddRef(k, ref)
 			}
@@ -388,27 +387,12 @@ func (c *grpcClient) BuildOpts() client.BuildOpts {
 }
 
 type reference struct {
-	c   *grpcClient
-	id  string
-	def *opspb.Definition
-	dop *llb.DefinitionOp
+	id string
+	c  *grpcClient
 }
 
-func newReference(c *grpcClient, id string, def *opspb.Definition) (*reference, error) {
-	dop, err := llb.NewDefinitionOp(def)
-	if err != nil {
-		return nil, err
-	}
-
-	return &reference{c: c, id: id, def: def, dop: dop}, nil
-}
-
-func (r *reference) ToInput(c *llb.Constraints) (*opspb.Input, error) {
-	return r.Vertex().Output().ToInput(c)
-}
-
-func (r *reference) Vertex() llb.Vertex {
-	return r.dop
+func newReference(c *grpcClient, id string) (*reference, error) {
+	return &reference{id: id, c: c}, nil
 }
 
 func (r *reference) ReadFile(ctx context.Context, req client.ReadRequest) ([]byte, error) {

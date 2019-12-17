@@ -4,12 +4,14 @@ import (
 	"context"
 	"sync"
 
+	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
 
 type BuildFunc func(context.Context, Client) (*Result, error)
 
 type Result struct {
+	llb.Output
 	mu       sync.Mutex
 	Ref      Reference
 	Refs     map[string]Reference
@@ -18,6 +20,10 @@ type Result struct {
 
 func NewResult() *Result {
 	return &Result{}
+}
+
+func (r *Result) SetOutput(output llb.Output) {
+	r.Output = output
 }
 
 func (r *Result) AddMeta(k string, v []byte) {
