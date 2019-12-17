@@ -103,7 +103,8 @@ func (c *grpcClient) Run(ctx context.Context, f client.BuildFunc) (retError erro
 					res = &client.Result{}
 				}
 				pbRes := &pb.Result{
-					Metadata: res.Metadata,
+					Metadata:   res.Metadata,
+					Definition: res.Definition,
 				}
 				if res.Refs != nil {
 					m := map[string]*pb.Ref{}
@@ -310,11 +311,10 @@ func (c *grpcClient) Solve(ctx context.Context, creq client.SolveRequest) (*clie
 		}
 		res.SetRef(&reference{id: resp.Ref, c: c})
 	} else {
-		vtx, err := llb.NewDefinitionOp(resp.Result.Definition)
+		err = res.SetDefinition(resp.Result.Definition)
 		if err != nil {
 			return nil, err
 		}
-		res.SetOutput(vtx.Output())
 
 		res.Metadata = resp.Result.Metadata
 		switch pbRes := resp.Result.Result.(type) {

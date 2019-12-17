@@ -5,25 +5,33 @@ import (
 	"sync"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/solver/pb"
 	"github.com/pkg/errors"
 )
 
 type BuildFunc func(context.Context, Client) (*Result, error)
 
 type Result struct {
-	llb.Output
-	mu       sync.Mutex
-	Ref      Reference
-	Refs     map[string]Reference
-	Metadata map[string][]byte
+	mu         sync.Mutex
+	Ref        Reference
+	Refs       map[string]Reference
+	Metadata   map[string][]byte
+	Definition *pb.Definition
+	output     llb.Output
 }
 
 func NewResult() *Result {
 	return &Result{}
 }
 
-func (r *Result) SetOutput(output llb.Output) {
-	r.Output = output
+func (r *Result) SetDefinition(def *pb.Definition) error {
+	op, err := llb.NewDefinitionOp(def)
+	if err != nil {
+		return err
+	}
+
+	r.output = op.Output()
+	return nil
 }
 
 func (r *Result) AddMeta(k string, v []byte) {

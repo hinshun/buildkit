@@ -52,7 +52,10 @@ func (c *bridgeClient) Solve(ctx context.Context, req client.SolveRequest) (*cli
 		return nil, err
 	}
 
-	cRes := &client.Result{}
+	cRes := &client.Result{
+		Metadata: res.Metadata,
+		Definition: res.Definition,
+	}
 	c.mu.Lock()
 	for k, r := range res.Refs {
 		rr, err := newRef(r, res.Definition)
@@ -71,7 +74,6 @@ func (c *bridgeClient) Solve(ctx context.Context, req client.SolveRequest) (*cli
 		cRes.SetRef(rr)
 	}
 	c.mu.Unlock()
-	cRes.Metadata = res.Metadata
 
 	return cRes, nil
 }
@@ -100,7 +102,10 @@ func (c *bridgeClient) toFrontendResult(r *client.Result) (*frontend.Result, err
 		return nil, nil
 	}
 
-	res := &frontend.Result{}
+	res := &frontend.Result{
+		Metadata: r.Metadata,
+		Definition: r.Definition,
+	}
 
 	if r.Refs != nil {
 		res.Refs = make(map[string]solver.CachedResult, len(r.Refs))
@@ -121,7 +126,6 @@ func (c *bridgeClient) toFrontendResult(r *client.Result) (*frontend.Result, err
 		c.final[rr] = struct{}{}
 		res.Ref = rr.CachedResult
 	}
-	res.Metadata = r.Metadata
 
 	return res, nil
 }
