@@ -410,6 +410,23 @@ func (c *grpcClient) BuildOpts() client.BuildOpts {
 	}
 }
 
+func (c *grpcClient) Inputs(ctx context.Context) (map[string]llb.State, error) {
+	resp, err := c.client.Inputs(ctx, &pb.InputsRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	states := make(map[string]llb.State)
+	for key, def := range resp.Definitions {
+		op, err := llb.NewDefinitionOp(def)
+		if err != nil {
+			return nil, err
+		}
+		states[key] = llb.NewState(op)
+	}
+	return states, nil
+}
+
 type reference struct {
 	c      *grpcClient
 	id     string

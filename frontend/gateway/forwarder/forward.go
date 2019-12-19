@@ -20,9 +20,10 @@ import (
 	fstypes "github.com/tonistiigi/fsutil/types"
 )
 
-func llbBridgeToGatewayClient(ctx context.Context, llbBridge frontend.FrontendLLBBridge, opts map[string]string, workerInfos []clienttypes.WorkerInfo) (*bridgeClient, error) {
+func llbBridgeToGatewayClient(ctx context.Context, llbBridge frontend.FrontendLLBBridge, opts map[string]string, inputs map[string]*llb.Definition, workerInfos []clienttypes.WorkerInfo) (*bridgeClient, error) {
 	return &bridgeClient{
 		opts:              opts,
+		inputs:            inputs,
 		FrontendLLBBridge: llbBridge,
 		sid:               session.FromContext(ctx),
 		workerInfos:       workerInfos,
@@ -34,6 +35,7 @@ type bridgeClient struct {
 	frontend.FrontendLLBBridge
 	mu           sync.Mutex
 	opts         map[string]string
+	inputs       map[string]*llb.Definition
 	final        map[*ref]struct{}
 	sid          string
 	exporterAttr map[string][]byte
@@ -93,6 +95,18 @@ func (c *bridgeClient) BuildOpts() client.BuildOpts {
 		Caps:      gwpb.Caps.CapSet(gwpb.Caps.All()),
 		LLBCaps:   opspb.Caps.CapSet(opspb.Caps.All()),
 	}
+}
+
+func (c *bridgeClient) Inputs(ctx context.Context) (map[string]llb.State, error) {
+	inps := make(map[string]llb.State)
+	for key, def := range c.inputs {
+		op, err := llb.NewDefinitionOp(def.ToPB())
+		if err != nil {
+			return nil, err
+		}
+		inps[key] = llb.NewState(op)
+	}
+	return inps, nil
 }
 
 func (c *bridgeClient) toFrontendResult(r *client.Result) (*frontend.Result, error) {

@@ -158,6 +158,7 @@ message BuildOp {
 	repeated string args = 4;
 	repeated string env = 5;
 	string cwd = 6;
+	map<string, pb.Definition> defs = 7;
 }
 
 // BuildInput is used for BuildOp.

@@ -145,13 +145,13 @@ func (b *buildOp) buildWithLLB(ctx context.Context, inputs []solver.Result) (out
 }
 
 func (b *buildOp) buildWithFrontend(ctx context.Context, inputs []solver.Result) (outputs []solver.Result, retErr error) {
-	inp := inputs[b.op.Builder]
+	builderInput := inputs[b.op.Builder]
 
-	ref, ok := inp.Sys().(*worker.WorkerRef)
+	wref, ok := builderInput.Sys().(*worker.WorkerRef)
 	if !ok {
-		return nil, errors.Errorf("invalid reference for build %T", inp.Sys())
+		return nil, errors.Errorf("invalid reference for build %T", builderInput.Sys())
 	}
-	rootFS := ref.ImmutableRef
+	rootFS := wref.ImmutableRef
 
 	cfg := specs.ImageConfig{
 		Entrypoint: b.op.Args,
@@ -159,7 +159,14 @@ func (b *buildOp) buildWithFrontend(ctx context.Context, inputs []solver.Result)
 		WorkingDir: b.op.Cwd,
 	}
 
-	res, err := gateway.ExecWithFrontend(ctx, b.llbBridge, b.wi, rootFS, cfg, b.op.Attrs)
+	frontendInputs := make(map[string]*llb.Definition)
+	for key, pbDef := range b.op.Defs {
+		def := new(llb.Definition)
+		def.FromPB(pbDef)
+		frontendInputs[key] = def
+	}
+
+	res, err := gateway.ExecWithFrontend(ctx, b.llbBridge, b.wi, rootFS, cfg, b.op.Attrs, frontendInputs)
 	if err != nil {
 		return nil, err
 	}
