@@ -26,6 +26,7 @@ service LLBBridge {
 	rpc StatFile(StatFileRequest) returns (StatFileResponse);
 	rpc Ping(PingRequest) returns (PongResponse);
 	rpc Return(ReturnRequest) returns (ReturnResponse);
+	rpc Inputs(InputsRequest) returns (InputsResponse);
 }
 
 message Result {
@@ -59,6 +60,13 @@ message ReturnRequest {
 }
 
 message ReturnResponse {
+}
+
+message InputsRequest {
+}
+
+message InputsResponse {
+	map<string, pb.Definition> Definitions = 1;
 }
 
 message ResolveImageConfigRequest {

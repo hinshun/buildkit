@@ -35,6 +35,7 @@ type SolveOpt struct {
 	SharedKey             string
 	Frontend              string
 	FrontendAttrs         map[string]string
+	FrontendInputs        map[string]*llb.Definition
 	CacheExports          []CacheOptionsEntry
 	CacheImports          []CacheOptionsEntry
 	Session               []session.Attachable
