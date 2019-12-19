@@ -19,8 +19,8 @@ func Build(source State, opts ...BuildOption) State {
 		opt.SetBuildOption(&info)
 	}
 
-	build := NewBuild(source, &info, info.Constraints)
-	return NewState(build.Output())
+	op := NewBuild(source, &info, info.Constraints)
+	return NewState(op.Output())
 }
 
 // BuildOption is an option for a definition-based build state.
@@ -57,12 +57,20 @@ func WithFilename(fn string) BuildOption {
 // NewBuild returns a new BuildOp that will solve using a definition in the
 // source state.
 func NewBuild(source State, info *BuildInfo, c Constraints) *BuildOp {
-	return &BuildOp{builder: pb.LLBBuilder, root: source, inputs: []Output{source.Output()}, info: info, constraints: c}
+	var inputs []Output
+	if source.Output() != nil {
+		inputs = append(inputs, source.Output())
+	}
+	return &BuildOp{builder: pb.LLBBuilder, root: source, inputs: inputs, constraints: c, bi: info}
 }
 
 // NewFrontend returns a new BuildOp that will solve using a frontend.
-func NewFrontend(root State, c Constraints) *BuildOp {
-	return &BuildOp{builder: pb.FrontendBuilder, root: root, inputs: []Output{root.Output()}, constraints: c}
+func NewFrontend(frontend State, info *FrontendInfo, c Constraints) *BuildOp {
+	var inputs []Output
+	if frontend.Output() != nil {
+		inputs = append(inputs, frontend.Output())
+	}
+	return &BuildOp{builder: pb.FrontendBuilder, root: frontend, inputs: inputs, constraints: c, fi: info}
 }
 
 // BuildOp is an Op implementation that represents a lazy solve using a
@@ -72,8 +80,12 @@ type BuildOp struct {
 	builder     pb.InputIndex
 	root        State
 	inputs      []Output
-	info        *BuildInfo
 	constraints Constraints
+
+	bi *BuildInfo
+
+	fi   *FrontendInfo
+	defs map[string]*pb.Definition
 }
 
 func (b *BuildOp) ToInput(c *Constraints) (*pb.Input, error) {
@@ -90,6 +102,18 @@ func (b *BuildOp) Vertex() Vertex {
 }
 
 func (b *BuildOp) Validate() error {
+	if b.fi != nil {
+		if len(b.fi.Inputs) > 0 && b.defs == nil {
+			b.defs = make(map[string]*pb.Definition)
+			for key, input := range b.fi.Inputs {
+				def, err := input.Marshal()
+				if err != nil {
+					return err
+				}
+				b.defs[key] = def.ToPB()
+			}
+		}
+	}
 	return nil
 }
 
@@ -103,20 +127,25 @@ func (b *BuildOp) Marshal(c *Constraints) (digest.Digest, []byte, *pb.OpMetadata
 
 	pbo := &pb.BuildOp{
 		Builder: b.builder,
+		Inputs:  make(map[string]*pb.BuildInput),
 		Attrs:   make(map[string]string),
 	}
 
 	if b.builder == pb.LLBBuilder {
-		pbo.Inputs = map[string]*pb.BuildInput{
-			pb.LLBDefinitionInput: {Input: pb.InputIndex(0)}}
+		pbo.Inputs[pb.LLBDefinitionInput] = &pb.BuildInput{Input: pb.InputIndex(0)}
 
-		if b.info.DefinitionFilename != "" {
-			pbo.Attrs[pb.AttrLLBDefinitionFilename] = b.info.DefinitionFilename
+		if b.bi.DefinitionFilename != "" {
+			pbo.Attrs[pb.AttrLLBDefinitionFilename] = b.bi.DefinitionFilename
 		}
 	} else {
 		pbo.Args = b.root.GetArgs()
 		pbo.Env = b.root.Env()
 		pbo.Cwd = b.root.GetDir()
+
+		pbo.Defs = make(map[string]*pb.Definition)
+		for key, pbDef := range b.defs {
+			pbo.Defs[key] = pbDef
+		}
 	}
 
 	if b.constraints.Metadata.Caps == nil {
@@ -148,6 +177,9 @@ func (b *BuildOp) Marshal(c *Constraints) (digest.Digest, []byte, *pb.OpMetadata
 }
 
 func (b *BuildOp) Output() Output {
+	if b.root.Output() == nil {
+		return nil
+	}
 	return b
 }
 
