@@ -2,6 +2,7 @@ package client
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -28,11 +29,14 @@ import (
 	"github.com/containerd/containerd/snapshots"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/imagemetaresolver"
+	"github.com/moby/buildkit/frontend/dockerfile/builder"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
+	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/testutil"
@@ -58,7 +62,9 @@ type nopWriteCloser struct {
 func (nopWriteCloser) Close() error { return nil }
 
 func TestIntegration(t *testing.T) {
-	mirrors := integration.WithMirroredImages(integration.OfficialImages("busybox:latest", "alpine:latest"))
+	images := integration.OfficialImages("busybox:latest", "alpine:latest")
+	images["docker/dockerfile:latest"] = "docker.io/docker/dockerfile:latest"
+	mirrors := integration.WithMirroredImages(images)
 
 	integration.Run(t, []integration.Test{
 		testRelativeWorkDir,
@@ -96,6 +102,8 @@ func TestIntegration(t *testing.T) {
 		testFrontendMetadataReturn,
 		testFrontendUseSolveResults,
 		testFrontendUseForwardedSolveResults,
+		testNestedLLBBuild,
+		testNestedFrontendBuild,
 		testSSHMount,
 		testStdinClosed,
 		testHostnameLookup,
@@ -1525,6 +1533,110 @@ func testFrontendUseSolveResults(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 
 	dt, err := ioutil.ReadFile(filepath.Join(destDir, "foo2"))
+	require.NoError(t, err)
+	require.Equal(t, dt, []byte("data"))
+}
+
+func testNestedLLBBuild(t *testing.T, sb integration.Sandbox) {
+	requiresLinux(t)
+	c, err := New(context.TODO(), sb.Address())
+	require.NoError(t, err)
+	defer c.Close()
+
+	st := llb.Scratch().File(
+		llb.Mkfile("foo", 0600, []byte("data")),
+	)
+
+	def, err := st.Marshal()
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = llb.WriteTo(def, &buf)
+	require.NoError(t, err)
+
+	frontend := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		st := llb.Scratch().File(
+			llb.Mkfile(pb.LLBDefinitionInput, 0600, buf.Bytes()),
+		)
+
+		st = llb.Build(st)
+		def, err := st.Marshal()
+		if err != nil {
+			return nil, err
+		}
+
+		return c.Solve(ctx, gateway.SolveRequest{
+			Definition: def.ToPB(),
+		})
+	}
+
+	destDir, err := ioutil.TempDir("", "buildkit")
+	require.NoError(t, err)
+	defer os.RemoveAll(destDir)
+
+	_, err = c.Build(context.TODO(), SolveOpt{
+		Exports: []ExportEntry{
+			{
+				Type:      ExporterLocal,
+				OutputDir: destDir,
+			},
+		},
+	}, "", frontend, nil)
+	require.NoError(t, err)
+
+	dt, err := ioutil.ReadFile(filepath.Join(destDir, "foo"))
+	require.NoError(t, err)
+	require.Equal(t, dt, []byte("data"))
+}
+
+func testNestedFrontendBuild(t *testing.T, sb integration.Sandbox) {
+	requiresLinux(t)
+	c, err := New(context.TODO(), sb.Address())
+	require.NoError(t, err)
+	defer c.Close()
+
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /
+`)
+	dir, err := tmpdir(
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("data"), 0600),
+	)
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	frontend := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		st := llb.Frontend(llb.Image("docker/dockerfile:latest", imagemetaresolver.WithDefault))
+		def, err := st.Marshal()
+		if err != nil {
+			return nil, err
+		}
+
+		return c.Solve(ctx, gateway.SolveRequest{
+			Definition: def.ToPB(),
+		})
+	}
+
+	destDir, err := ioutil.TempDir("", "buildkit")
+	require.NoError(t, err)
+	defer os.RemoveAll(destDir)
+
+	_, err = c.Build(context.TODO(), SolveOpt{
+		Exports: []ExportEntry{
+			{
+				Type:      ExporterLocal,
+				OutputDir: destDir,
+			},
+		},
+		LocalDirs: map[string]string{
+			builder.DefaultLocalNameDockerfile: dir,
+			builder.DefaultLocalNameContext:    dir,
+		},
+	}, "", frontend, nil)
+	require.NoError(t, err)
+
+	dt, err := ioutil.ReadFile(filepath.Join(destDir, "foo"))
 	require.NoError(t, err)
 	require.Equal(t, dt, []byte("data"))
 }
