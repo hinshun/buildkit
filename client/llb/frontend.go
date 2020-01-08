@@ -14,7 +14,10 @@ package llb
 // efficient to use Gateway to represent a lazy solve than using read or stat
 // file APIs on a solved result.
 func Frontend(frontend State, opts ...FrontendOption) State {
-	var info FrontendInfo
+	info := FrontendInfo{
+		Inputs: make(map[string]State),
+		Opts:   make(map[string]string),
+	}
 	for _, opt := range opts {
 		opt.SetFrontendOption(&info)
 	}
@@ -38,6 +41,7 @@ func (fn frontendOptionFunc) SetFrontendOption(fi *FrontendInfo) {
 type FrontendInfo struct {
 	constraintsWrapper
 	Inputs map[string]State
+	Opts   map[string]string
 }
 
 func (fi *FrontendInfo) SetFrontendOption(fi2 *FrontendInfo) {
@@ -46,11 +50,14 @@ func (fi *FrontendInfo) SetFrontendOption(fi2 *FrontendInfo) {
 
 var _ FrontendOption = &FrontendInfo{}
 
-func WithInput(key string, input State) FrontendOption {
+func WithFrontendInput(key string, input State) FrontendOption {
 	return frontendOptionFunc(func(fi *FrontendInfo) {
-		if fi.Inputs == nil {
-			fi.Inputs = make(map[string]State)
-		}
 		fi.Inputs[key] = input
+	})
+}
+
+func WithFrontendOpt(key, value string) FrontendOption {
+	return frontendOptionFunc(func(fi *FrontendInfo) {
+		fi.Opts[key] = value
 	})
 }

@@ -141,6 +141,7 @@ func (b *BuildOp) Marshal(c *Constraints) (digest.Digest, []byte, *pb.OpMetadata
 		pbo.Args = b.root.GetArgs()
 		pbo.Env = b.root.Env()
 		pbo.Cwd = b.root.GetDir()
+		pbo.Attrs = b.fi.Opts
 
 		pbo.Defs = make(map[string]*pb.Definition)
 		for key, pbDef := range b.defs {
