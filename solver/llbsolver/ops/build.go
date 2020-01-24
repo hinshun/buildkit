@@ -159,10 +159,8 @@ func (b *buildOp) buildWithFrontend(ctx context.Context, inputs []solver.Result)
 		WorkingDir: b.op.Cwd,
 	}
 
-	frontendInputs := make(map[string]*llb.Definition)
-	for key, pbDef := range b.op.Defs {
-		def := new(llb.Definition)
-		def.FromPB(pbDef)
+	frontendInputs := make(map[string]*pb.Definition)
+	for key, def := range b.op.Defs {
 		frontendInputs[key] = def
 	}
 

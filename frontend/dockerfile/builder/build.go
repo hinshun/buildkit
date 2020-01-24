@@ -20,6 +20,7 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
 	"github.com/moby/buildkit/frontend/gateway/client"
+	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/apicaps"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -58,6 +59,7 @@ var gitUrlPathWithFragmentSuffix = regexp.MustCompile(`\.git(?:#.+)?$`)
 func Build(ctx context.Context, c client.Client) (*client.Result, error) {
 	opts := c.BuildOpts().Opts
 	caps := c.BuildOpts().LLBCaps
+	gatewaycaps := c.BuildOpts().Caps
 
 	marshalOpts := []llb.ConstraintsOpt{llb.WithCaps(caps)}
 
@@ -191,6 +193,24 @@ func Build(ctx context.Context, c client.Client) (*client.Result, error) {
 				src = httpContext
 			}
 			buildContext = &httpContext
+			isScratchContext = true
+		}
+	} else if (&gatewaycaps).Supports(gwpb.CapFrontendInputs) == nil {
+		inputs, err := c.Inputs(ctx)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get frontend inputs")
+		}
+
+		if !forceLocalDockerfile {
+			inputDockerfile, ok := inputs[DefaultLocalNameDockerfile]
+			if ok {
+				src = inputDockerfile
+			}
+		}
+
+		inputCtx, ok := inputs[DefaultLocalNameContext]
+		if ok {
+			buildContext = &inputCtx
 			isScratchContext = true
 		}
 	}

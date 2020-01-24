@@ -35,6 +35,7 @@ import (
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
+	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/httpserver"
@@ -95,6 +96,7 @@ var allTests = []integration.Test{
 	testCacheMultiPlatformImportExport,
 	testOnBuildCleared,
 	testFrontendUseForwardedSolveResults,
+	testFrontendInputs,
 }
 
 var fileOpTests = []integration.Test{
@@ -4471,6 +4473,53 @@ COPY foo foo2
 	dt, err := ioutil.ReadFile(filepath.Join(destDir, "foo3"))
 	require.NoError(t, err)
 	require.Equal(t, dt, []byte("data"))
+}
+
+func testFrontendInputs(t *testing.T, sb integration.Sandbox) {
+	f := getFrontend(t, sb)
+
+	dockerfile := []byte(`
+FROM scratch
+COPY ./foo /foo2
+`)
+
+	file := []byte(`data`)
+
+	dockerfileDef, err := llb.Scratch().File(
+		llb.Mkfile("Dockerfile", 0600, dockerfile),
+	).Marshal()
+	require.NoError(t, err)
+
+	contextDef, err := llb.Scratch().File(
+		llb.Mkfile("foo", 0600, file),
+	).Marshal()
+	require.NoError(t, err)
+
+	c, err := client.New(context.TODO(), sb.Address())
+	require.NoError(t, err)
+	defer c.Close()
+
+	destDir, err := ioutil.TempDir("", "buildkit")
+	require.NoError(t, err)
+	defer os.RemoveAll(destDir)
+
+	_, err = f.Solve(context.TODO(), c, client.SolveOpt{
+		FrontendInputs: map[string]*pb.Definition{
+			builder.DefaultLocalNameDockerfile: dockerfileDef.ToPB(),
+			builder.DefaultLocalNameContext:    contextDef.ToPB(),
+		},
+		Exports: []client.ExportEntry{
+			{
+				Type:      client.ExporterLocal,
+				OutputDir: destDir,
+			},
+		},
+	}, nil)
+	require.NoError(t, err)
+
+	dt, err := ioutil.ReadFile(filepath.Join(destDir, "foo2"))
+	require.NoError(t, err)
+	require.Equal(t, string(dt), "data")
 }
 
 func tmpdir(appliers ...fstest.Applier) (string, error) {

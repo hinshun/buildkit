@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/moby/buildkit/client/buildid"
-	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	gatewayapi "github.com/moby/buildkit/frontend/gateway/pb"
@@ -64,7 +63,7 @@ func (c *Client) Build(ctx context.Context, opt SolveOpt, product string, buildF
 	return c.solve(ctx, nil, cb, opt, statusChan)
 }
 
-func (c *Client) gatewayClientForBuild(buildid string, inputs map[string]*llb.Definition) gatewayapi.LLBBridgeClient {
+func (c *Client) gatewayClientForBuild(buildid string, inputs map[string]*pb.Definition) gatewayapi.LLBBridgeClient {
 	g := gatewayapi.NewLLBBridgeClient(c.conn)
 	return &gatewayClientForBuild{g, buildid, inputs}
 }
@@ -72,7 +71,7 @@ func (c *Client) gatewayClientForBuild(buildid string, inputs map[string]*llb.De
 type gatewayClientForBuild struct {
 	gateway gatewayapi.LLBBridgeClient
 	buildID string
-	inputs  map[string]*llb.Definition
+	inputs  map[string]*pb.Definition
 }
 
 func (g *gatewayClientForBuild) ResolveImageConfig(ctx context.Context, in *gatewayapi.ResolveImageConfigRequest, opts ...grpc.CallOption) (*gatewayapi.ResolveImageConfigResponse, error) {
@@ -111,12 +110,7 @@ func (g *gatewayClientForBuild) Return(ctx context.Context, in *gatewayapi.Retur
 }
 
 func (g *gatewayClientForBuild) Inputs(ctx context.Context, in *gatewayapi.InputsRequest, opts ...grpc.CallOption) (*gatewayapi.InputsResponse, error) {
-	defs := make(map[string]*pb.Definition)
-	for key, input := range g.inputs {
-		defs[key] = input.ToPB()
-	}
-
 	return &gatewayapi.InputsResponse{
-		Definitions: defs,
+		Definitions: g.inputs,
 	}, nil
 }
