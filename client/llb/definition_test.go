@@ -22,7 +22,7 @@ func TestDefinitionEquivalence(t *testing.T) {
 		{"file op", Scratch().File(Mkdir("foo", 0600).Mkfile("foo/bar", 0600, []byte("data")).Copy(Scratch(), "src", "dst"))},
 		{"platform constraint", Image("ref", LinuxArm64)},
 		{"frontend scratch op", Frontend(Scratch())},
-		{"frontend op", Frontend(Image("ref"), WithInput("key", Git("remote", "ref")))},
+		{"frontend op", Frontend(Image("ref"), WithFrontendInput("key", Git("remote", "ref")), WithFrontendOpt("key", "value"))},
 		{"build scratch op", Build(Scratch())},
 		{"build op", Build(Image("ref"), WithFilename("filename"))},
 	} {

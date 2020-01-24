@@ -2,7 +2,6 @@ package llb
 
 import (
 	"github.com/moby/buildkit/solver/pb"
-	"github.com/moby/buildkit/util/apicaps"
 	digest "github.com/opencontainers/go-digest"
 )
 
@@ -137,7 +136,17 @@ func (b *BuildOp) Marshal(c *Constraints) (digest.Digest, []byte, *pb.OpMetadata
 		if b.bi.DefinitionFilename != "" {
 			pbo.Attrs[pb.AttrLLBDefinitionFilename] = b.bi.DefinitionFilename
 		}
+
+		addCap(&b.constraints, pb.CapBuildOpLLBFileName)
 	} else {
+		// If Marshal is called without providing the BuildOpts.Caps, we can only
+		// guess that CapBuildFrontend is supported.
+		if c.Caps != nil {
+			if err := c.Caps.Supports(pb.CapBuildFrontend); err != nil {
+				return "", nil, nil, err
+			}
+		}
+
 		pbo.Args = b.root.GetArgs()
 		pbo.Env = b.root.Env()
 		pbo.Cwd = b.root.GetDir()
@@ -147,12 +156,9 @@ func (b *BuildOp) Marshal(c *Constraints) (digest.Digest, []byte, *pb.OpMetadata
 		for key, pbDef := range b.defs {
 			pbo.Defs[key] = pbDef
 		}
-	}
 
-	if b.constraints.Metadata.Caps == nil {
-		b.constraints.Metadata.Caps = make(map[apicaps.CapID]bool)
+		addCap(&b.constraints, pb.CapBuildFrontend)
 	}
-	b.constraints.Metadata.Caps[pb.CapBuildOpLLBFileName] = true
 
 	pop, md := MarshalConstraints(c, &b.constraints)
 	pop.Op = &pb.Op_Build{

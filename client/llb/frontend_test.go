@@ -14,7 +14,7 @@ func TestFrontendMarshal(t *testing.T) {
 	inputDef, err := input.Marshal()
 	require.NoError(t, err)
 
-	st := Frontend(Image("foo"), WithInput("mykey", input))
+	st := Frontend(Image("foo"), WithFrontendInput("mykey", input), WithFrontendOpt("myopt", "bar"))
 
 	def, err := st.Marshal()
 	require.NoError(t, err)

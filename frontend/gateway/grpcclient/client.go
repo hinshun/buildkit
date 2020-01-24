@@ -411,6 +411,11 @@ func (c *grpcClient) BuildOpts() client.BuildOpts {
 }
 
 func (c *grpcClient) Inputs(ctx context.Context) (map[string]llb.State, error) {
+	err := c.caps.Supports(pb.CapFrontendInputs)
+	if err != nil {
+		return nil, err
+	}
+
 	resp, err := c.client.Inputs(ctx, &pb.InputsRequest{})
 	if err != nil {
 		return nil, err
