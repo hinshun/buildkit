@@ -261,6 +261,10 @@ func (s State) GetDir() string {
 	return getDir(s)
 }
 
+func (s State) Args(a ...string) State {
+	return args(a...)(s)
+}
+
 func (s State) GetArgs() []string {
 	return getArgs(s)
 }
