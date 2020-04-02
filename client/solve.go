@@ -163,7 +163,7 @@ func (c *Client) solve(ctx context.Context, def *llb.Definition, runGateway runG
 		}
 
 		eg.Go(func() error {
-			return s.Run(statusContext, grpchijack.Dialer(c.controlClient()))
+			return s.Run(statusContext, grpchijack.Dialer(c.ControlClient()))
 		})
 	}
 
@@ -199,7 +199,7 @@ func (c *Client) solve(ctx context.Context, def *llb.Definition, runGateway runG
 			frontendInputs[key] = def.ToPB()
 		}
 
-		resp, err := c.controlClient().Solve(ctx, &controlapi.SolveRequest{
+		resp, err := c.ControlClient().Solve(ctx, &controlapi.SolveRequest{
 			Ref:            ref,
 			Definition:     pbd,
 			Exporter:       ex.Type,
@@ -243,7 +243,7 @@ func (c *Client) solve(ctx context.Context, def *llb.Definition, runGateway runG
 	}
 
 	eg.Go(func() error {
-		stream, err := c.controlClient().Status(statusContext, &controlapi.StatusRequest{
+		stream, err := c.ControlClient().Status(statusContext, &controlapi.StatusRequest{
 			Ref: ref,
 		})
 		if err != nil {

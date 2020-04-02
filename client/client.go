@@ -76,7 +76,7 @@ func New(ctx context.Context, address string, opts ...ClientOpt) (*Client, error
 	return c, nil
 }
 
-func (c *Client) controlClient() controlapi.ControlClient {
+func (c *Client) ControlClient() controlapi.ControlClient {
 	return controlapi.NewControlClient(c.conn)
 }
 
